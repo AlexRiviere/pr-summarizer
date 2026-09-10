@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from .config import ALLOWED_ORIGINS
 from .errors import GitHubAPIError, InvalidPRUrlError, OpenAIAPIError
 from .github_client import fetch_pr_context
 from .models import SummarizeRequest, SummarizeResponse
@@ -15,7 +16,7 @@ app = FastAPI(title="PR Summary Bot")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
