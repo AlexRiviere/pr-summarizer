@@ -2,7 +2,14 @@ import json
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError, AsyncOpenAI
 
-from .config import MAX_DIFF_CHARS, OPENAI_API_KEY, OPENAI_MODEL
+from .config import (
+    MAX_DESCRIPTION_CHARS,
+    MAX_DIFF_CHARS,
+    MAX_FILES_SUMMARY_CHARS,
+    MAX_PROMPT_CHARS,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+)
 from .errors import OpenAIAPIError
 from .models import PullRequestContext, SummarizeResponse
 
@@ -47,23 +54,38 @@ SYSTEM_PROMPT = (
 )
 
 
-def _truncate_diff(diff: str) -> tuple[str, bool]:
-    if len(diff) <= MAX_DIFF_CHARS:
-        return diff, False
-    return diff[:MAX_DIFF_CHARS], True
+def _truncate(text: str, limit: int) -> tuple[str, bool]:
+    if len(text) <= limit:
+        return text, False
+    return text[:limit], True
 
 
-def _build_user_prompt(ctx: PullRequestContext, diff: str, truncated: bool) -> str:
+def _build_user_prompt(ctx: PullRequestContext) -> tuple[str, bool, int, int]:
+    """Build the prompt within a single total character budget (MAX_PROMPT_CHARS).
+
+    Description and the files summary are truncated to their own fixed caps first;
+    whatever budget remains (capped at MAX_DIFF_CHARS) is given to the diff, so a
+    very long description/file list can't silently blow out the prompt size.
+    Returns (prompt, diff_truncated, original_diff_chars, diff_chars_used).
+    """
+    description, _ = _truncate(ctx.description or "(no description provided)", MAX_DESCRIPTION_CHARS)
+
     files_summary = "\n".join(
         f"- {f.filename} ({f.status}, +{f.additions}/-{f.deletions})" for f in ctx.changed_files
     ) or "(no file stats available)"
+    files_summary, _ = _truncate(files_summary, MAX_FILES_SUMMARY_CHARS)
+
+    reserved_chars = len(description) + len(files_summary)
+    diff_budget = max(0, min(MAX_DIFF_CHARS, MAX_PROMPT_CHARS - reserved_chars))
+    original_diff_chars = len(ctx.diff)
+    diff, diff_truncated = _truncate(ctx.diff, diff_budget)
 
     parts = [
         f"Repository: {ctx.owner}/{ctx.repo}",
         f"PR #{ctx.number}: {ctx.title}",
         f"Author: {ctx.author}",
         "Description:",
-        ctx.description or "(no description provided)",
+        description,
         "",
         "Changed files:",
         files_summary,
@@ -71,17 +93,17 @@ def _build_user_prompt(ctx: PullRequestContext, diff: str, truncated: bool) -> s
         "Unified diff:",
         diff,
     ]
-    if truncated:
+    if diff_truncated:
         parts.append(
             "\n[NOTE: The diff above was truncated to the first "
-            f"{MAX_DIFF_CHARS} characters because it exceeded the size limit.]"
+            f"{len(diff)} characters because it exceeded the prompt size budget.]"
         )
     if ctx.files_truncated:
         parts.append(
             f"\n[NOTE: This PR changed {ctx.total_changed_files} files, but only the first "
             f"{len(ctx.changed_files)} are listed above and reflected in the diff.]"
         )
-    return "\n".join(parts)
+    return "\n".join(parts), diff_truncated, original_diff_chars, len(diff)
 
 
 async def summarize_pr(ctx: PullRequestContext) -> SummarizeResponse:
@@ -90,9 +112,7 @@ async def summarize_pr(ctx: PullRequestContext) -> SummarizeResponse:
             "OPENAI_API_KEY is not configured on the server.", 500
         )
 
-    diff, truncated = _truncate_diff(ctx.diff)
-    user_prompt = _build_user_prompt(ctx, diff, truncated)
-    original_diff_chars = len(ctx.diff)
+    user_prompt, truncated, original_diff_chars, diff_chars_used = _build_user_prompt(ctx)
 
     client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
@@ -134,7 +154,7 @@ async def summarize_pr(ctx: PullRequestContext) -> SummarizeResponse:
     if truncated:
         result.truncation_note = (
             f"The diff was too large to fully analyze ({original_diff_chars:,} characters) "
-            f"and was truncated to the first {MAX_DIFF_CHARS:,} characters before being sent "
+            f"and was truncated to {diff_chars_used:,} characters before being sent "
             "to the model. This summary may not reflect changes past that point."
         )
 

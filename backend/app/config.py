@@ -9,6 +9,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 OPENAI_MODEL = "gpt-4o-mini"
 MAX_DIFF_CHARS = 15_000
+MAX_DESCRIPTION_CHARS = 4_000
+MAX_FILES_SUMMARY_CHARS = 4_000
+# Total budget across description + files_summary + diff sections of the prompt.
+# Description and files_summary are reserved first; whatever remains (capped at
+# MAX_DIFF_CHARS) is given to the diff.
+MAX_PROMPT_CHARS = 20_000
 
 _default_origins = "http://localhost:5173,http://127.0.0.1:5173"
 ALLOWED_ORIGINS = [
