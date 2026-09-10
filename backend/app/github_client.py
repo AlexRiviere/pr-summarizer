@@ -53,6 +53,11 @@ async def fetch_pr_context(url: str) -> PullRequestContext:
         for f in files_data
     ]
 
+    # pr_data["changed_files"] is GitHub's authoritative total file count for the PR,
+    # independent of how many we actually fetched/kept below the MAX_FILES cap.
+    total_changed_files = pr_data.get("changed_files", len(changed_files))
+    files_truncated = total_changed_files > len(changed_files)
+
     return PullRequestContext(
         owner=owner,
         repo=repo,
@@ -61,6 +66,8 @@ async def fetch_pr_context(url: str) -> PullRequestContext:
         description=pr_data.get("body") or "",
         author=(pr_data.get("user") or {}).get("login") or "unknown",
         changed_files=changed_files,
+        total_changed_files=total_changed_files,
+        files_truncated=files_truncated,
         diff=diff_text,
         diff_truncated=False,
     )

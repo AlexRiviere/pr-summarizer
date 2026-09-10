@@ -76,6 +76,11 @@ def _build_user_prompt(ctx: PullRequestContext, diff: str, truncated: bool) -> s
             "\n[NOTE: The diff above was truncated to the first "
             f"{MAX_DIFF_CHARS} characters because it exceeded the size limit.]"
         )
+    if ctx.files_truncated:
+        parts.append(
+            f"\n[NOTE: This PR changed {ctx.total_changed_files} files, but only the first "
+            f"{len(ctx.changed_files)} are listed above and reflected in the diff.]"
+        )
     return "\n".join(parts)
 
 
@@ -131,5 +136,13 @@ async def summarize_pr(ctx: PullRequestContext) -> SummarizeResponse:
             f"The diff was too large to fully analyze ({original_diff_chars:,} characters) "
             f"and was truncated to the first {MAX_DIFF_CHARS:,} characters before being sent "
             "to the model. This summary may not reflect changes past that point."
+        )
+
+    result.files_truncated = ctx.files_truncated
+    if ctx.files_truncated:
+        result.files_truncation_note = (
+            f"This PR changed {ctx.total_changed_files:,} files, but only the first "
+            f"{len(ctx.changed_files):,} were fetched and analyzed. The changed_files list "
+            "and diff above do not cover the full change."
         )
     return result

@@ -23,6 +23,8 @@ class PullRequestContext(BaseModel):
     description: str
     author: str
     changed_files: list[ChangedFile]
+    total_changed_files: int
+    files_truncated: bool
     diff: str
     diff_truncated: bool
 
@@ -34,3 +36,5 @@ class SummarizeResponse(BaseModel):
     potential_issues: list[str]
     diff_truncated: bool = False
     truncation_note: str | None = None
+    files_truncated: bool = False
+    files_truncation_note: str | None = None
