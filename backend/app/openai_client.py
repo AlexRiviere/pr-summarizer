@@ -114,18 +114,17 @@ async def summarize_pr(ctx: PullRequestContext) -> SummarizeResponse:
 
     user_prompt, truncated, original_diff_chars, diff_chars_used = _build_user_prompt(ctx)
 
-    client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-
     try:
-        response = await client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_schema", "json_schema": RESPONSE_SCHEMA},
-            temperature=0.2,
-        )
+        async with AsyncOpenAI(api_key=OPENAI_API_KEY) as client:
+            response = await client.chat.completions.create(
+                model=OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                response_format={"type": "json_schema", "json_schema": RESPONSE_SCHEMA},
+                temperature=0.2,
+            )
     except APITimeoutError as exc:
         raise OpenAIAPIError("Timed out while contacting the OpenAI API.", 504) from exc
     except APIConnectionError as exc:
