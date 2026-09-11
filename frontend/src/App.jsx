@@ -111,6 +111,7 @@ export default function App() {
 
       <form onSubmit={handleSubmit} className="pr-form">
         <textarea
+          aria-label="GitHub pull request URL"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://github.com/owner/repo/pull/123"
